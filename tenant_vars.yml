@@ -1,0 +1,32 @@
+tenant:
+  name: "ansible-tenant1"
+
+vrfs:
+  - { name: "DEMO" }
+
+bridge_domains:
+  - { name: "COMPUTE_SVC", vrf: "DEMO" }
+  - { name: "STORAGE_SVC", vrf: "DEMO" }
+  - { name: "ADMIN"      , vrf: "DEMO" }
+
+subnets:
+  - { bd: "COMPUTE_SVC", vrf: "DEMO", subnet: "10.10.11.1/24", scope: "public" }
+  - { bd: "STORAGE_SVC", vrf: "DEMO", subnet: "10.10.12.1/24", scope: "public" }
+  - { bd: "ADMIN"      , vrf: "DEMO", subnet: "10.10.10.1/24", scope: "public" }
+
+app_profiles:
+  - { name: "AP" }
+
+epgs:
+  - { name: "EPG_VLAN2020", ap: "AP", bd: "COMPUTE_SVC", domain: "vmware-dom" }
+  - { name: "EPG_VLAN2030", ap: "AP", bd: "STORAGE_SVC", domain: "vmware-dom" }
+  - { name: "EPG_VLAN2010", ap: "AP", bd: "ADMIN"      , domain: "lab-dom" }
+     
+domains:
+  lab-dom:
+    domain_type: "phys"
+  vmware-dom:
+    domain_type: "vmm"
+    vm_provider: "vmware"
+
+# state_all: absent

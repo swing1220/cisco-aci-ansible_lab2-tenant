@@ -1,0 +1,115 @@
+- hosts: apic
+  connection: local
+  gather_facts: no
+  collections:
+  - cisco.aci
+
+  vars:
+    apic_info: &apic_info
+      host:           "{{ ansible_host }}" 
+      user:           "{{ ansible_user }}" 
+      password:       "{{ ansible_password }}" 
+      validate_certs: "{{ validate_certs }}"
+      use_ssl:        "{{ use_ssl }}"
+    
+    var_state: &var_state
+      state: "{{ state_all if state_all is defined else item.state if item.state is defined else 'present' }}"
+ 
+  vars_files: tenant_vars.yml
+
+  tasks:
+  # Tenants
+  - name: task1 - Tenant
+    cisco.aci.aci_tenant:
+      <<: *apic_info
+      tenant: "{{ tenant.name }}"
+      state:  "{{ state_all if state_all is defined else tenant.state if tenant.state is defined else 'present' }}"
+    register: task_tenant
+    tags: tn-task1, tn
+
+  # Tenants > (tenant) > Networking > VRFs
+  - name: task2 - VRF
+    cisco.aci.aci_vrf:
+      <<: *apic_info
+      <<: *var_state
+      tenant: "{{ tenant.name }}"
+      vrf:    "{{ item.name }}"
+    loop: "{{ vrfs }}"
+    tags: tn-task2, tn, vrf
+
+  # Tenants > (tenant) > Networking > Bridge Domains
+  - name: task3 - Bridge Domains
+    cisco.aci.aci_bd:
+      <<: *apic_info
+      <<: *var_state
+      tenant: "{{ tenant.name }}"
+      vrf:    "{{ item.vrf }}"
+      bd:     "{{ item.name }}"
+    loop: "{{ bridge_domains }}"
+    tags: tn-task3, tn, vrf, bd
+
+  # Tenants > (tenant) > Networking > Bridge Domains > (bd) > Subnets
+  - name: task4 - Bridge Domain Subnets
+    cisco.aci.aci_bd_subnet:
+      <<: *apic_info
+      <<: *var_state
+      tenant:  "{{ tenant.name }}"
+      bd:      "{{ item.bd }}"
+      gateway: "{{ item.subnet.split('/') | first }}"
+      mask:    "{{ item.subnet.split('/') | last }}"
+      scope:   "{{ item.scope }}"
+    loop: "{{ subnets }}"
+    tags: tn-task4, tn, bd, subnet
+
+  # Tenants > (tenant) > Application Profiles
+  - name: task5 - Application Profile
+    cisco.aci.aci_ap:
+      <<: *apic_info
+      <<: *var_state
+      tenant: "{{ tenant.name }}"
+      ap:     "{{ item.name }}"
+    loop: "{{ app_profiles }}"
+    tags: tn-task5, tn, ap
+
+  # Tenants > (tenant) > Application Profiles > (ap) > Application EPGs
+  - name: task6 - EPG
+    cisco.aci.aci_epg:
+      <<: *apic_info
+      <<: *var_state
+      tenant: "{{ tenant.name }}"
+      bd:     "{{ item.bd }}"
+      ap:     "{{ item.ap }}"
+      epg:    "{{ item.name }}"
+    with_items: "{{ epgs }}"
+    tags: tn-task6, tn, bd, ap, epg
+
+  # Tenants > (tenant) > Application Profiles > (ap) > Application EPGs > (epg) > Domains
+  - name: task7a - EPG to Physical Domain
+    cisco.aci.aci_epg_to_domain:
+      <<: *apic_info
+      <<: *var_state
+      tenant:      "{{ tenant.name }}"
+      ap:          "{{ item.ap }}"
+      epg:         "{{ item.name }}"
+      domain:      "{{ item.domain }}"
+      domain_type: "{{ domains[item.domain].domain_type }}"
+    with_items: "{{ epgs }}"
+    when: 
+    - domains[item.domain].domain_type == "phys"
+    tags: tn-task7, tn, ap, epg, domain, domain_phys
+
+  # Tenants > (tenant) > Application Profiles > (ap) > Application EPGs > (epg) > Domains
+  - name: task7b - EPG to VMM Domain
+    cisco.aci.aci_epg_to_domain:
+      <<: *apic_info
+      <<: *var_state
+      tenant:      "{{ tenant.name }}"
+      ap:          "{{ item.ap }}"
+      epg:         "{{ item.name }}"
+      domain:      "{{ item.domain }}"
+      domain_type: "{{ domains[item.domain].domain_type }}"
+      vm_provider: "{{ domains[item.domain].vm_provider }}"
+    with_items: "{{ epgs }}"
+    when: 
+    - domains[item.domain].domain_type == "vmm"
+    tags: tn-task7, tn, ap, epg, domain, domain_vmm
